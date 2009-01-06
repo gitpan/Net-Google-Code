@@ -1,0 +1,25 @@
+---
+abstract: ''
+author:
+  - 'sunnavy <sunnavy@bestpractical.com>'
+build_requires:
+  Test::More: 0
+distribution_type: module
+generated_by: 'Module::Install version 0.77'
+license: perl
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: Net-Google-Code
+no_index:
+  directory:
+    - inc
+    - t
+requires:
+  HTML::TreeBuilder: 0
+  Moose: 0
+  Params::Validate: 0
+  WWW::Mechanize: 0
+resources:
+  license: http://dev.perl.org/licenses/
+version: 0.01
