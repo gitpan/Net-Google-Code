@@ -1,29 +1,24 @@
 package Net::Google::Code::Issue;
 use Moose;
 use Params::Validate qw(:all);
+with 'Net::Google::Code::Role';
 use Net::Google::Code::IssueComment;
 
-has connection => (
-    isa => 'Net::Google::Code::Connection',
-    is  => 'ro',
-    required => 1,
-);
-
 has state => (
-    isa => 'HashRef',
-    is  => 'rw',
+    isa     => 'HashRef',
+    is      => 'rw',
     default => sub { {} },
 );
 
 has labels => (
-    isa => 'HashRef',
-    is  => 'rw',
+    isa     => 'HashRef',
+    is      => 'rw',
     default => sub { {} },
 );
 
 has comments => (
-    isa => 'ArrayRef[Net::Google::Code::Comment]',
-    is => 'rw',
+    isa     => 'ArrayRef[Net::Google::Code::Comment]',
+    is      => 'rw',
     default => sub { [] },
 );
 
@@ -36,7 +31,7 @@ has attachments => (
 our @PROPS = qw(id status owner closed cc summary reporter description);
 
 for my $prop (@PROPS) {
-    no strict 'refs'; ## no critic
+    no strict 'refs';    ## no critic
     *{ "Net::Google::Code::Issue::" . $prop } = sub { shift->state->{$prop} };
 }
 
@@ -44,27 +39,26 @@ sub load {
     my $self = shift;
     my ($id) = validate_pos( @_, { type => SCALAR } );
     $self->state->{id} = $id;
-    my $content = $self->connection->_fetch( "/issues/detail?id=" . $id );
-    $self->parse( $content );
+    my $content = $self->fetch( "/issues/detail?id=" . $id );
+    $self->parse($content);
     return $id;
 }
 
-
 sub parse {
-    my $self = shift;
+    my $self    = shift;
     my $content = shift;
 
     require HTML::TreeBuilder;
-    my $tree    = HTML::TreeBuilder->new;
+    my $tree = HTML::TreeBuilder->new;
     $tree->parse_content($content);
     $tree->elementify;
 
     # extract summary
-    my ($summary) = $tree->look_down(class => 'h3' );
+    my ($summary) = $tree->look_down( class => 'h3' );
     $self->state->{summary} = $summary->content_array_ref->[0];
 
     # extract reporter and description
-    my $description = $tree->look_down(class => 'vt issuedescription' );
+    my $description = $tree->look_down( class => 'vt issuedescription' );
     $self->state->{reporter} =
       $description->look_down( class => "author" )->content_array_ref->[1]
       ->content_array_ref->[0];
@@ -74,19 +68,19 @@ sub parse {
     $text =~ s/\r\n/\n/g;
     $self->state->{description} = $text;
 
-    my $attachments = $description->look_down(class => 'attachments');
-    if ( $attachments ) {
-        my @items = $attachments->find_by_tag_name( 'tr' );
+    my $attachments = $description->look_down( class => 'attachments' );
+    if ($attachments) {
+        my @items = $attachments->find_by_tag_name('tr');
         require Net::Google::Code::IssueAttachment;
         while ( scalar @items ) {
             my $tr1 = shift @items;
             my $tr2 = shift @items;
             my $a =
               Net::Google::Code::IssueAttachment->new(
-                connection => $self->connection );
+                project => $self->project );
 
             if ( $a->parse( $tr1, $tr2 ) ) {
-                push @{$self->attachments}, $a;
+                push @{ $self->attachments }, $a;
             }
         }
     }
@@ -114,7 +108,7 @@ sub parse {
                 $value =~ s/^\s+//;
                 $value =~ s/\s+$//;
             }
-            $self->state->{lc $key} = $value;
+            $self->state->{ lc $key } = $value;
         }
         else {
             my $href = $meta->find_by_tag_name('a')->attr_get_i('href');
@@ -138,15 +132,15 @@ sub parse {
     pop @comments;    # last one is for adding comment
     for my $comment (@comments) {
         my $object =
-          Net::Google::Code::IssueComment->new(
-            connection => $self->connection );
+          Net::Google::Code::IssueComment->new( project => $self->project );
         $object->parse($comment);
-        push @{$self->comments}, $object;
+        push @{ $self->comments }, $object;
     }
 
 }
 
 no Moose;
+__PACKAGE__->meta->make_immutable;
 
 1;
 
@@ -154,8 +148,14 @@ __END__
 
 =head1 NAME
 
-Net::Google::Code::Issue - 
+Net::Google::Code::Issue - Google Code Issue
 
+=head1 SYNOPSIS
+
+    use Net::Google::Code::Issue;
+    
+    my $issue = Net::Google::Code::Issue->new( project => 'net-google-code' );
+    $issue->load(42);
 
 =head1 DESCRIPTION
 
@@ -185,11 +185,9 @@ Net::Google::Code::Issue -
 
 sunnavy  C<< <sunnavy@bestpractical.com> >>
 
-
 =head1 LICENCE AND COPYRIGHT
 
 Copyright 2008-2009 Best Practical Solutions.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
-

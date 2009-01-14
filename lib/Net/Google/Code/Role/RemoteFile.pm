@@ -1,19 +1,21 @@
-package Net::Google::Code::IssuePropChange;
-use Moose;
+package Net::Google::Code::Role::RemoteFile;
+use Moose::Role;
 
-has property  => ( isa => 'Str', is => 'rw' );
-has old_value => ( isa => 'Str', is => 'rw' );
-has new_value => ( isa => 'Str', is => 'rw' );
+has name    => ( isa => 'Str', is => 'rw' );
+has url     => ( isa => 'Str', is => 'rw' );
+has size    => ( isa => 'Str', is => 'rw' );
+has content => ( isa => 'Str', is => 'rw' );
 
-no Moose;
-__PACKAGE__->meta->make_immutable;
+no Moose::Role;
+
 1;
 
 __END__
 
 =head1 NAME
 
-Net::Google::Code::IssuePropChange - 
+Net::Google::Code::Role::RemoteFile - 
+
 
 =head1 DESCRIPTION
 
