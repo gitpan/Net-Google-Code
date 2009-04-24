@@ -4,7 +4,7 @@ use Moose;
 use Params::Validate qw(:all);
 with 'Net::Google::Code::Role';
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 our $AUTHORITY = 'cpan:FAYLAND';
 
 has name => ( is => 'ro', isa => 'Str', required => 1 );
@@ -13,6 +13,7 @@ has 'source' => (
     isa => 'Str',
     is  => 'ro',
     lazy => 1,
+    predicate => 'has_source',
     default => sub {
         my $self = shift;
         return $self->fetch( $self->base_svn_url . 'wiki/' . $self->name . '.wiki' );
@@ -88,6 +89,92 @@ has 'updated_by' => (
     },
 );
 
+has 'summary' => (
+    isa => 'Maybe[Str]',
+    is  => 'ro',
+    lazy => 1,
+    default => sub {
+        my $self = shift;
+        
+        if ( $self->has_source ) { # get from source
+            my @lines = split(/\n/, $self->source);
+            foreach my $line (@lines ) {
+                if ( $line =~ /^\#summary\s+(.*?)\s+$/ ) {
+                    return $1;
+                }
+                last if ( $line !~ /^\#/ );
+            }
+            return;
+        }
+        # get from the html tree
+        my $tree  = $self->__html_tree;
+        my $title = $tree->find_by_tag_name('title')->content_array_ref->[0];
+        my @parts = split(/\s+\-\s+/, $title, 4);
+        return $parts[2] if ( scalar @parts == 4 );
+        return;
+    },
+);
+
+has 'comments' => (
+    isa => 'ArrayRef',
+    is => 'ro',
+    lazy => 1,
+    default => sub {
+        my $self = shift;
+        
+        my @rets;
+        
+        my $tree  = $self->__html_tree;
+        my @comments = $tree->look_down( class => 'artifactcomment' );
+        foreach my $comment ( @comments ) {
+            my $href = $comment->look_down( class => 'author' )->find_by_tag_name('a')->attr('href');
+            my ( $author ) = ( $href =~ /u\/(.*?)\// );
+            my $date = $comment->look_down( class => 'date' )->attr('title');
+            my $content = $comment->look_down( class => 'commentcontent' )->as_HTML(undef, undef, { } );
+            # remove <div class="commentcontent">
+            # STUPID I!
+            $content =~ s/^\<div class\=\"commentcontent\"\>//;
+            $content =~ s/\<\/div\>$//;
+            chomp($content);
+            push @rets, {
+                author  => $author,
+                date    => $date,
+                content => $content,
+            };
+        }
+        
+        return \@rets;
+    },
+);
+
+has 'labels' => (
+    isa => 'ArrayRef',
+    is  => 'ro',
+    lazy => 1,
+    default => sub {
+        my $self = shift;
+        
+        if ( $self->has_source ) { # get from source
+            my @lines = split(/\n/, $self->source);
+            foreach my $line (@lines ) {
+                if ( $line =~ /^\#labels\s+(.*?)\s+$/ ) {
+                    return [ split(/\,/, $1) ];
+                }
+                last if ( $line !~ /^\#/ );
+            }
+            return [];
+        }
+        # get from the html tree
+        my $tree  = $self->__html_tree;
+        my @tags = $tree->look_down( href => qr/q\=label\:/);
+        my @labels;
+        foreach my $tag ( @tags ) {
+	        push @labels, $tag->content_array_ref->[0];
+	    }
+	    return \@labels;
+    },
+);
+
 no Moose;
 __PACKAGE__->meta->make_immutable;
 
@@ -113,21 +200,37 @@ get Wiki details from Google Code Project
 
 =head1 ATTRIBUTES
 
-=head2 source
+=over 4
+
+=item source
 
 wiki source code
 
-=head2 html
+=item html
 
 html code of this wiki entry
 
-=head2 updated_time
+=item summary
+
+summary of this wiki entry
+
+=item labels
+
+labels of this wiki entry
+
+=item updated_time
 
 last updated time of this wiki entry
 
-=head2 updated_by
+=item updated_by
 
 last updator of this wiki entry
+
+=item comments
+
+wiki entry comments
+
+=back
 
 =head1 AUTHOR
 

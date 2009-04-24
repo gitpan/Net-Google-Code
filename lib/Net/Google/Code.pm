@@ -3,7 +3,7 @@ package Net::Google::Code;
 use Moose;
 with 'Net::Google::Code::Role';
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 has 'home'  => (
     isa     => 'Net::Google::Code::Home',
