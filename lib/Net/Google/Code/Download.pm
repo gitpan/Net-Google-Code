@@ -3,7 +3,12 @@ package Net::Google::Code::Download;
 use Moose;
 use Params::Validate qw(:all);
 
-with 'Net::Google::Code::Role';
+with 'Net::Google::Code::Role::Fetchable', 'Net::Google::Code::Role::URL';
+
+has 'project' => (
+    isa      => 'Str',
+    is       => 'rw',
+);
 
 has 'name' => (
     isa => 'Str',
@@ -48,6 +53,8 @@ has 'uploaded' => (
 sub load {
 	my $self = shift;
     my $name = shift || $self->name;
+    die "current object doesn't have name and load() is not passed a name either"
+      unless $name;
 	
 	# http://code.google.com/p/net-google-code/downloads/detail?name=Net-Google-Code-0.01.tar.gz
 	
@@ -143,6 +150,8 @@ Net::Google::Code::Download - Google Code Download
 =item load
 
 =item parse
+
+=item project
 
 =item name
 

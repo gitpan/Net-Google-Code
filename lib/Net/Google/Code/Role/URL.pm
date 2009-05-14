@@ -1,7 +1,8 @@
 package Net::Google::Code::Role::URL;
 use Moose::Role;
 
-requires 'project'; 
+# requires don't support attribute yet :/
+# requires 'project'; 
 
 has 'base_url' => (
     isa     => 'Str',
@@ -34,7 +35,7 @@ __END__
 
 =head1 NAME
 
-Net::Google::Code::Role::URL - 
+Net::Google::Code::Role::URL - URL Role 
 
 
 =head1 DESCRIPTION
