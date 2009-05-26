@@ -2,37 +2,77 @@ package Net::Google::Code::Role::Pageable;
 use Moose::Role;
 use Params::Validate ':all';
 use WWW::Mechanize;
-with 'Net::Google::Code::Role::Fetchable';
+with 'Net::Google::Code::Role::Fetchable', 'Net::Google::Code::Role::HTMLTree';
 use Scalar::Util qw/blessed/;
 no Moose::Role;
 
-sub first_columns {
+sub rows {
     my $self = shift;
-    my $html = shift;
-    my $tree;
-    if ( blessed $html ) {
-        $tree = $html;
-    }
-    else {
-        require HTML::TreeBuilder;
-        $tree = HTML::TreeBuilder->new;
-        $tree->parse_content($html);
-        $tree->elementify;
+    my %args = validate(
+        @_,
+        {
+            html  => { type => SCALAR | OBJECT },
+            limit => {
+                type     => SCALAR,
+                optional => 1,
+            },
+        }
+    );
+    $args{limit} ||= 999_999_999; # the impossible huge limit
+    my $tree = $args{html};
+    $tree = $self->html_tree( html => $tree ) unless blessed $tree;
+
+    # assuming there's at most 20 columns
+    my @titles;
+    my $label_column;
+    for my $num ( 0 .. 20 ) {
+        my $title_tag = $tree->look_down( class => "col_$num" );
+        if ( $title_tag ) {
+            my $title = $title_tag->as_text;
+            if ( $title eq "\x{a0}" ) {
+                $title_tag = ($tree->look_down( class => "col_$num" ))[1];
+                $title = $title_tag->as_text;
+            }
+
+            if ( $title =~ /(\w+)/ ) {
+                push @titles, lc $1;
+
+                if ( $title =~ /label/i ) {
+                    $label_column = $num;
+                }
+            }
+        }
+        else {
+            last;
+        }
     }
 
-    my @columns;
+    die "no idea what the column spec is" unless @titles;
+
+    my @rows;
 
     my $pagination = $tree->look_down( class => 'pagination' );
     if ( my ( $start, $end, $total ) =
         $pagination->as_text =~ /(\d+)\s+-\s+(\d+)\s+of\s+(\d+)/ )
     {
-        push @columns, $self->_first_columns($tree);
+        push @rows,
+          $self->_rows(
+            html         => $tree,
+            titles       => \@titles,
+            label_column => $label_column,
+          );
 
-        while ( scalar @columns < $total ) {
+        $total = $args{limit} if $args{limit} < $total;
+        while ( scalar @rows < $total ) {
+
             if ( $self->mech->follow_link( text_regex => qr/Next\s+/ ) ) {
                 if ( $self->mech->response->is_success ) {
-                    push @columns,
-                      $self->_first_columns( $self->mech->content );
+                    push @rows,
+                      $self->_rows(
+                        html         => $self->mech->content,
+                        titles       => \@titles,
+                        label_column => $label_column,
+                      );
                 }
                 else {
                     die "failed to follow 'Next' link";
@@ -44,32 +84,66 @@ sub first_columns {
             }
         }
     }
-    return @columns;
-}
-
-sub _first_columns {
-    my $self = shift;
-    my $html = shift;
-    my $tree;
-    if ( blessed $html ) {
-        $tree = $html;
+    if ( scalar @rows > $args{limit} ) {
+        # this happens when limit is less than the 1st page's number 
+        return @rows[0 .. $args{limit}-1];
     }
     else {
-        require HTML::TreeBuilder;
-        $tree = HTML::TreeBuilder->new;
-        $tree->parse_content($html);
-        $tree->elementify;
+        return @rows;
     }
+}
+
+sub _rows {
+    my $self = shift;
+    my %args = validate(
+        @_,
+        {
+            html         => { type => SCALAR | OBJECT },
+            titles       => { type => ARRAYREF, },
+            label_column => { optional => 1 },
+        }
+    );
+    my $tree = $args{html};
+    $tree = $self->html_tree( html => $tree ) unless blessed $tree;
+    my @titles = @{$args{titles}};
+    my $label_column = $args{label_column};
 
     my @columns;
-    my @tags = $tree->look_down( class => 'vt id col_0' );
-    for my $tag (@tags) {
-        my $column = $tag->as_text;
-        $column =~ s/^\s+//;
-        $column =~ s/\s+$//;
-        push @columns, $column;
+    my @rows;
+
+    for ( my $i = 0 ; $i < @titles ; $i++ ) {
+        my @tags = $tree->look_down( class => qr/^vt (id )?col_$i/ );
+        my $k = 0;
+        for ( my $j = 0 ; $j < @tags ; $j++ ) {
+            my $column = $tags[$j]->as_text;
+            next unless $column =~ /[-\w]/; # skip the '›' thing or alike
+
+            my @elements  = split /\x{a0}/, $column;
+            for ( @elements ) {
+                s/^\s+//;
+                s/\s+$//;
+            }
+            $column = shift @elements;
+            $column = '' if $column eq '----';
+
+            if ( $i == 0 ) {
+                push @rows, { $titles[0] => $column };
+            }
+            else {
+                $rows[$k]{ $titles[$i] } = $column;
+            }
+
+            if ( $label_column && $i == $label_column ) {
+                my @labels;
+                if (@elements) {
+                    @labels = split /\s+/, shift @elements;
+                }
+                $rows[$k]{labels} = \@labels if @labels;
+            }
+            $k++;
+        }
     }
-    return @columns;
+    return @rows;
 }
 
 1;
@@ -85,7 +159,11 @@ Net::Google::Code::Role::Pageable - Pageable Role
 
 =head1 INTERFACE
 
-=head2 first_columns
+=over 4
+
+=item rows
+
+=back
 
 =head1 AUTHOR
 

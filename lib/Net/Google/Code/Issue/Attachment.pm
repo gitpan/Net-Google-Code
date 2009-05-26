@@ -1,11 +1,16 @@
 package Net::Google::Code::Issue::Attachment;
 use Moose;
-with 'Net::Google::Code::Role::Fetchable';
+with 'Net::Google::Code::Role::Fetchable', 'Net::Google::Code::Role::HTMLTree';
 use Scalar::Util qw/blessed/;
+use MIME::Types;
+use File::MMagic;
 
-has 'name'    => ( isa => 'Str', is => 'rw' );
-has 'url'     => ( isa => 'Str', is => 'rw' );
-has 'size'    => ( isa => 'Str', is => 'rw' );
+has 'name'         => ( isa => 'Str', is => 'rw' );
+has 'url'          => ( isa => 'Str', is => 'rw' );
+has 'size'         => ( isa => 'Str', is => 'rw' );
+has 'id'           => ( isa => 'Int', is => 'rw' );
+has 'content'      => ( isa => 'Str', is => 'rw' );
+has 'content_type' => ( isa => 'Str', is => 'rw' );
 
 sub parse {
     my $self = shift;
@@ -20,10 +25,7 @@ sub parse {
         ( $tr1, $tr2 ) = @$html;
     }
     else {
-        require HTML::TreeBuilder;
-        my $tree = HTML::TreeBuilder->new;
-        $tree->parse_content( $html );
-        $tree->elementify;
+        my $tree = $self->html_tree( html => $html );
         ( $tr1, $tr2 ) = $tree->find_by_tag_name( 'tr' );
     }
 
@@ -33,6 +35,13 @@ sub parse {
         $name =~ s/^\s+//;
         $name =~ s/\s+$//;
         $self->name($name);
+
+        # google code doesn't parse download's content type at all, we need to
+        # figure it out by ourselves
+        my $mime_type = MIME::Types->new->mimeTypeOf( $self->name );
+        if ($mime_type) {
+            $self->content_type( $mime_type->type );
+        }
     }
 
     my $td = $tr2->find_by_tag_name('td');
@@ -42,24 +51,19 @@ sub parse {
         $size =~ s/\s+$//;
         $self->size($size);
 
-        $self->url( $td->find_by_tag_name('a')->attr_get_i('href') );
+        $self->url( $td->find_by_tag_name('a')->attr('href') );
+        if ( $self->url =~ /aid=([-\d]+)/ ) {
+            $self->id( $1 );
+        }
     }
 
     return 1;
 }
 
 sub parse_attachments {
-    my $html = $_[-1]; # in case object call ->
-    my $element;
-    if ( blessed $html ) {
-        $element = $html;
-    }
-    else {
-        require HTML::TreeBuilder;
-        $element = HTML::TreeBuilder->new;
-        $element->parse_content( $html );
-        $element->elementify;
-    }
+    my $self    = shift;
+    my $element = shift;
+    $element = $self->html_tree( html => $element ) unless blessed $element;
 
     my @attachments;
 
@@ -76,9 +80,16 @@ sub parse_attachments {
     return @attachments;
 }
 
-sub content {
-    my $self = shift;
-    return $self->fetch( $self->url );
+sub load {
+    my $self    = shift;
+    my $content = $self->fetch( $self->url );
+    $self->content($content);
+
+    return 1 if $self->content_type;
+
+    # in case MIME::Types failed to get, let File::MMagic rescue!
+    my $content_type = File::MMagic->new->checktype_contents($content);
+    $self->content_type( $content_type || 'application/octet-stream' );
 }
 
 no Moose;
@@ -124,6 +135,15 @@ object, return a list of Net::Google::Code::Attachment objects.
 =item size
 
 =item url
+
+=item id
+
+=item load
+
+=item content
+
+=item content_type
+
 
 =back
 

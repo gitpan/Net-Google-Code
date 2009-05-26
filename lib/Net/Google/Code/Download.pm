@@ -2,8 +2,9 @@ package Net::Google::Code::Download;
 
 use Moose;
 use Params::Validate qw(:all);
+use Scalar::Util qw/blessed/;
 
-with 'Net::Google::Code::Role::Fetchable', 'Net::Google::Code::Role::URL';
+with 'Net::Google::Code::Role';
 
 has 'project' => (
     isa      => 'Str',
@@ -67,12 +68,9 @@ sub load {
 
 sub parse {
     my $self = shift;
-    my $content = shift;
-	require HTML::TreeBuilder;
-    my $tree = HTML::TreeBuilder->new;
-    $tree->parse_content($content);
-    $tree->elementify;
-    
+    my $tree = shift;
+    $tree = $self->html_tree( html => $tree ) unless blessed $tree;
+
     my $entry;
     my $uploaded = $tree->look_down(class => 'date')->attr('title');
     $self->uploaded( $uploaded ) if $uploaded;
@@ -122,6 +120,25 @@ sub parse {
     if ( $checksum =~ /^SHA1 Checksum:\s+(\w+)/ ) {
         $self->checksum( $1 );
     }
+}
+
+sub BUILDARGS {
+    my $class        = shift;
+    my %args;
+    if ( @_ % 2 && ref $_[0] eq 'HASH' ) {
+        %args = %{$_[0]};
+    }
+    else {
+        %args = @_;
+    }
+
+    my %translations = ( filename => 'name', 'downloadcount' => 'count' );
+    for my $key ( keys %translations ) {
+        if ( exists $args{$key} ) {
+            $args{ $translations{$key} } = $args{$key};
+        }
+    }
+    return $class->SUPER::BUILDARGS(%args);
 }
 
 no Moose;

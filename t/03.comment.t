@@ -4,9 +4,16 @@ use warnings;
 use Test::More tests => 9;
 
 use Net::Google::Code::Issue::Comment;
+use Test::MockModule;
 my $comment =
   Net::Google::Code::Issue::Comment->new( project => 'test' );
 isa_ok( $comment, 'Net::Google::Code::Issue::Comment', '$comment' );
+
+my $mock = Test::MockModule->new('Net::Google::Code::Issue::Attachment');
+$mock->mock(
+    'fetch',
+    sub { '' }
+);
 
 my $content;
 {
@@ -24,7 +31,7 @@ $comment->parse( $tree );
 my %info = (
     sequence => 18,
     author   => 'jsykari',
-    date     => 'Wed Sep  3 04:44:39 2008',
+    date     => '2008-09-03T04:44:39',
     content  => "haha\n",
 );
 
@@ -86,7 +93,7 @@ __DATA__
  <div class="round2"></div>
  <div class="round1"></div>
  <div class="box-inner">
- <b>Cc:</b> thatan...@google.com<br><b>Status:</b> Available<br><b>Labels:</b>-Pri-2 Mstone-X Pri-3<br>
+ <b>Status:</b><br><b>Cc:</b> thatan...@google.com<br><b>Status:</b> Available<br><b>Labels:</b>-Pri-2 Mstone-X Pri-3<br>
  </div>
  <div class="round1"></div>
  <div class="round2"></div>

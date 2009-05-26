@@ -1,10 +1,11 @@
 package Net::Google::Code::Issue::Comment;
 use Moose;
 use Net::Google::Code::Issue::Attachment;
+with 'Net::Google::Code::Role::HTMLTree', 'Net::Google::Code::Role::DateTime';
 
 has 'updates' => ( isa => 'HashRef', is => 'rw', default => sub { {} } );
 has 'author'  => ( isa => 'Str',     is => 'rw' );
-has 'date'    => ( isa => 'Str',     is => 'rw' );
+has 'date'    => ( isa => 'DateTime',     is => 'rw' );
 has 'content' => ( isa => 'Str',     is => 'rw' );
 has 'sequence' => ( isa => 'Int', is => 'rw' );
 has 'attachments' => (
@@ -15,24 +16,14 @@ has 'attachments' => (
 
 sub parse {
     my $self    = shift;
-    my $html = shift;
-
-    my $element;
-    if ( blessed $html ) {
-        $element = $html;
-    }
-    else {
-        require HTML::TreeBuilder;
-        my $element = HTML::TreeBuilder->new;
-        $element->parse_content( $html );
-        $element->elementify;
-    }
+    my $element = shift;
+    $element = $self->html_tree( html => $element ) unless blessed $element;
 
     my $author  = $element->look_down( class => 'author' );
     my @a       = $author->find_by_tag_name('a');
     $self->sequence( $a[0]->content_array_ref->[0] );
     $self->author( $a[1]->content_array_ref->[0] );
-    $self->date( $element->look_down( class => 'date' )->attr_get_i('title') );
+    $self->date($self->parse_datetime( $element->look_down( class => 'date' )->attr('title') ));
     my $content = $element->find_by_tag_name('pre')->as_text;
     $content =~ s/^\s+//;
     $content =~ s/\s+$/\n/;
@@ -46,7 +37,13 @@ sub parse {
         while (@$content) {
             my $tag   = shift @$content;
             my $value = shift @$content;
-            shift @$content;    # this is for the <br>
+            if ( ref $value && $value->as_HTML =~ m!<br />! ) {
+                # this happens when there's no value for $tag
+                $value = '';
+            }
+            else {
+                shift @$content;    # this is for the <br>
+            }
 
             my $key = $tag->content_array_ref->[0];
             $key   =~ s/:$//;
@@ -69,8 +66,12 @@ sub parse {
     }
 
     my $att_tag = $element->look_down( class => 'attachments' );
-    my @attachments =
-      Net::Google::Code::Issue::Attachment::parse_attachments($att_tag);
+    my @attachments;
+
+    @attachments =
+      Net::Google::Code::Issue::Attachment->parse_attachments($att_tag)
+      if $att_tag;
+    $_->load() for @attachments;
     $self->attachments( \@attachments );
 
     return 1;

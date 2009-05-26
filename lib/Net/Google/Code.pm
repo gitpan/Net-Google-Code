@@ -1,10 +1,10 @@
 package Net::Google::Code;
 
 use Moose;
-with 'Net::Google::Code::Role::Fetchable', 'Net::Google::Code::Role::URL',
-  'Net::Google::Code::Role::Pageable';
+with 'Net::Google::Code::Role';
+use Scalar::Util qw/blessed/;
 
-our $VERSION = '0.05';
+our $VERSION = '0.10';
 
 has 'project' => (
     isa      => 'Str',
@@ -51,6 +51,40 @@ has 'wikis' => (
     is  => 'rw',
 );
 
+sub download {
+    my $self = shift;
+    require Net::Google::Code::Download;
+    return Net::Google::Code::Download->new(
+        project => $self->project,
+        $self->email    ? ( email    => $self->email )    : (),
+        $self->password ? ( password => $self->password ) : (),
+        @_
+    );
+}
+
+sub issue {
+    my $self = shift;
+    require Net::Google::Code::Issue;
+    return Net::Google::Code::Issue->new(
+        project => $self->project,
+        $self->email    ? ( email    => $self->email )    : (),
+        $self->password ? ( password => $self->password ) : (),
+        @_
+    );
+}
+
+sub wiki {
+    my $self = shift;
+    require Net::Google::Code::Wiki;
+    return Net::Google::Code::Wiki->new(
+        project => $self->project,
+        $self->email    ? ( email    => $self->email )    : (),
+        $self->password ? ( password => $self->password ) : (),
+        @_
+    );
+}
+
+
 sub load {
     my $self = shift;
     my $content = $self->fetch( $self->base_url );
@@ -59,11 +93,8 @@ sub load {
 
 sub parse {
     my $self    = shift;
-    my $content = shift;
-    require HTML::TreeBuilder;
-    my $tree = HTML::TreeBuilder->new;
-    $tree->parse_content($content);
-    $tree->elementify;
+    my $tree    = shift;
+    $tree = $self->html_tree( html => $tree ) unless blessed $tree;
 
     my $summary =
       $tree->look_down( id => 'psum' )->find_by_tag_name('a')->content_array_ref->[0];
@@ -94,38 +125,20 @@ sub parse {
         push @labels, $tag->content_array_ref->[0];
     }
     $self->labels( \@labels ) if @labels;
-
-}
-
-sub download {
-    my $self = shift;
-    require Net::Google::Code::Download;
-    return Net::Google::Code::Download->new(
-        project => $self->project,
-        @_
-    );
-}
-
-sub issue {
-    my $self = shift;
-    require Net::Google::Code::Issue;
-    return Net::Google::Code::Issue->new(
-        project => $self->project,
-        @_
-    );
+    return 1;
 }
 
 
 sub load_downloads {
     my $self = shift;
     my $content = $self->fetch( $self->base_feeds_url . 'downloads/list' );
-    my @names = $self->first_columns( $content );
+    my @rows = $self->rows( html => $content );
     my @downloads;
     require Net::Google::Code::Download;
-    for my $name ( @names ) {
+    for my $row ( @rows ) {
         my $download = Net::Google::Code::Download->new(
             project => $self->project,
-            name    => $name,
+            %$row,
         );
         $download->load;
         push @downloads, $download;
@@ -134,27 +147,13 @@ sub load_downloads {
 }
 
 
-sub wiki {
-
-    my $self = shift;
-    require Net::Google::Code::Wiki;
-    return Net::Google::Code::Wiki->new(
-        project => $self->project,
-        @_
-    );
-}
-
 sub load_wikis {
 	my $self = shift;
 	
 	my $wiki_svn = $self->base_svn_url . 'wiki/';
-	my $content = $self->fetch( $wiki_svn );
+    my $content  = $self->fetch( $wiki_svn );
+    my $tree = $self->html_tree( html => $content );
 
-    require HTML::TreeBuilder;
-    my $tree = HTML::TreeBuilder->new;
-    $tree->parse_content($content);
-    $tree->elementify;
-	
     my @wikis;
     my @li = $tree->find_by_tag_name('li');
     for my $li ( @li ) {
@@ -177,6 +176,7 @@ no Moose;
 __PACKAGE__->meta->make_immutable;
 
 1;
+
 __END__
 
 =head1 NAME
@@ -213,8 +213,6 @@ Net::Google::Code - a simple client library for google code
 =head1 DESCRIPTION
 
 Net::Google::Code is a simple client library for projects hosted in Google Code.
-
-Currently, it focuses on the basic read functionality for that is provided.
 
 =head1 INTERFACE
 

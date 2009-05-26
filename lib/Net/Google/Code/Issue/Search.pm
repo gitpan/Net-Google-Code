@@ -3,7 +3,10 @@ use Moose;
 use Params::Validate qw(:all);
 use Moose::Util::TypeConstraints;
 with 'Net::Google::Code::Role::URL',
-  'Net::Google::Code::Role::Fetchable', 'Net::Google::Code::Role::Pageable';
+  'Net::Google::Code::Role::Fetchable', 'Net::Google::Code::Role::Pageable',
+  'Net::Google::Code::Role::HTMLTree';
+use Net::Google::Code::Issue;
+use Encode;
 
 has 'project' => (
     isa      => 'Str',
@@ -25,21 +28,34 @@ subtype 'CanStr' => as 'Str' => where { $CAN{$_} };
 coerce 'Can' => from 'CanStr' => via { $CAN{$_} };
 
 has '_can' => (
-    is  => 'rw',
-    isa => 'Can',
+    is      => 'rw',
+    isa     => 'Can',
+    coerce  => 1,
     default => 2,
 );
 
-has '_q' => ( 
-    isa => 'Str',
-    is => 'rw',
+has '_q' => (
+    isa     => 'Str',
+    is      => 'rw',
     default => '',
 );
 
-has 'ids' => (
-    isa     => 'ArrayRef[Int]',
+has 'results' => (
+    isa     => 'ArrayRef[Net::Google::Code::Issue]',
     is      => 'rw',
     default => sub { [] },
+);
+
+has 'limit' => (
+    isa     => 'Int',
+    is      => 'rw',
+    default => 999_999_999,
+);
+
+has 'load_after_search' => (
+    isa     => 'Bool',
+    is      => 'rw',
+    default => 1,
 );
 
 sub search {
@@ -48,6 +64,9 @@ sub search {
         my %args = @_;
         $self->_can( $args{_can} ) if defined $args{_can};
         $self->_q( $args{_q} )     if defined $args{_q};
+        $self->limit( $args{limit} ) if defined $args{limit};
+        $self->load_after_search( $args{load_after_search} )
+          if defined $args{load_after_search};
     }
 
     $self->fetch( $self->base_url . 'issues/list' );
@@ -62,17 +81,31 @@ sub search {
     die "Server threw an error " . $mech->response->status_line . 'when search'
       unless $mech->response->is_success;
 
-    my $content = $mech->response->content;
+    my $content = decode( 'utf8', $mech->response->content );
 
-    if ( $mech->title =~ /Issue\s+(\d+)/ ) {
-        # get only one ticket
-        $self->ids( [$1] );
+    if ( $mech->title =~ /issue\s+(\d+)/i ) {
+
+         get only one ticket
+        my $issue =
+          Net::Google::Code::Issue->new( project => $self->project, id => $1, );
+        $issue->load if $self->load_after_search;
+        $self->results( [$issue] );
     }
-    elsif ( $mech->title =~ /Issues/ ) {
+    elsif ( $mech->title =~ /issues/i ) {
 
         # get a ticket list
-        my @ids = $self->first_columns($content);
-        $self->ids( \@ids );
+        my @rows =
+          $self->rows( html => $content, limit => $self->limit );
+        my @issues;
+        for my $row (@rows) {
+            my $issue = Net::Google::Code::Issue->new(
+                project => $self->project,
+                %$row,
+            );
+            $issue->load if $self->load_after_search;
+            push @issues, $issue;
+        }
+        $self->results( \@issues );
     }
     else {
         warn "no idea what the content like";
@@ -95,7 +128,9 @@ Net::Google::Code::Issue::Search - Issues Search API
 
 =head1 INTERFACE
 
-=head2 search ( _can => 'all', _q = 'foo' )
+=over 4
+
+=item search ( _can => 'all', _q = 'foo' )
 
 search with values $self->_can and $self->_q if without arguments.
 if there're arguments for _can or _q, this call will set $self->_can or
@@ -103,10 +138,14 @@ $self_q, then do the search.
 
 return true if search is successful, false on the other hand.
 
+=item project
 
-=head2 ids
+=item results
+
 this should be called after a successful search.
-returns issue ids as a arrayref.
+returns issues as a arrayref.
+
+=back
 
 =head1 AUTHOR
 
