@@ -1,7 +1,7 @@
 package Net::Google::Code::Issue;
 use Moose;
 use Params::Validate qw(:all);
-with 'Net::Google::Code::Role';
+with 'Net::Google::Code::TypicalRoles';
 use Net::Google::Code::Issue::Comment;
 use Net::Google::Code::Issue::Attachment;
 use Scalar::Util qw/blessed/;
@@ -112,7 +112,7 @@ sub parse {
     $text =~ s/\r\n/\n/g;
     $self->description( $text );
 
-    my $att_tag = $tree->look_down( class => 'attachments' );
+    my $att_tag = $description->look_down( class => 'attachments' );
     my @attachments;
     @attachments =
       Net::Google::Code::Issue::Attachment->parse_attachments($att_tag)
