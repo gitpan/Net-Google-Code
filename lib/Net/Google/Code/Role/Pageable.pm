@@ -1,10 +1,10 @@
 package Net::Google::Code::Role::Pageable;
-use Moose::Role;
+use Any::Moose 'Role';
 use Params::Validate ':all';
 use WWW::Mechanize;
-with 'Net::Google::Code::Role::Fetchable', 'Net::Google::Code::Role::HTMLTree';
+with 'Net::Google::Code::Role::Fetchable';
+with 'Net::Google::Code::Role::HTMLTree';
 use Scalar::Util qw/blessed/;
-no Moose::Role;
 
 sub rows {
     my $self = shift;
@@ -13,11 +13,12 @@ sub rows {
         {
             html  => { type => SCALAR | OBJECT },
             limit => {
-                type     => SCALAR,
+                type     => SCALAR | UNDEF,
                 optional => 1,
             },
         }
     );
+
     $args{limit} ||= 999_999_999; # the impossible huge limit
     my $tree = $args{html};
     $tree = $self->html_tree( html => $tree ) unless blessed $tree;
@@ -52,40 +53,40 @@ sub rows {
     my @rows;
 
     my $pagination = $tree->look_down( class => 'pagination' );
-    if ( my ( $start, $end, $total ) =
-        $pagination->as_text =~ /(\d+)\s+-\s+(\d+)\s+of\s+(\d+)/ )
-    {
-        push @rows,
-          $self->_rows(
+    return unless $pagination;
+
+    if ( $pagination->as_text =~ /\d+\s+-\s+\d+\s+of\s+\d+/ ) {
+        # all the rows in a page
+        push @rows, $self->_rows(
             html         => $tree,
             titles       => \@titles,
             label_column => $label_column,
           );
 
-        $total = $args{limit} if $args{limit} < $total;
-        while ( scalar @rows < $total ) {
-
-            if ( $self->mech->follow_link( text_regex => qr/Next\s+/ ) ) {
+        while ( scalar @rows < $args{limit} ) {
+            my $next_link = $self->mech->find_link( text_regex => qr/Next\s+/ );
+            if ($next_link) {
+                $self->mech->get( $next_link->url );
                 if ( $self->mech->response->is_success ) {
-                    push @rows,
-                      $self->_rows(
+                    push @rows, $self->_rows(
                         html         => $self->mech->content,
                         titles       => \@titles,
                         label_column => $label_column,
-                      );
+                    );
                 }
                 else {
                     die "failed to follow 'Next' link";
                 }
             }
             else {
-                warn "didn't find enough rows";
                 last;
             }
         }
     }
+
     if ( scalar @rows > $args{limit} ) {
-        # this happens when limit is less than the 1st page's number 
+        # this happens when limit is less than the 1st page's number, so in
+        # some similar situations 
         return @rows[0 .. $args{limit}-1];
     }
     else {
@@ -146,6 +147,7 @@ sub _rows {
     return @rows;
 }
 
+no Any::Moose;
 1;
 
 __END__

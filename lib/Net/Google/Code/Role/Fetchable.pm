@@ -1,24 +1,23 @@
 package Net::Google::Code::Role::Fetchable;
-use Moose::Role;
+use Any::Moose 'Role';
 use Params::Validate ':all';
 use WWW::Mechanize;
 use Encode;
 
-has 'mech' => (
-    isa     => 'WWW::Mechanize',
-    is      => 'ro',
-    lazy    => 1,
-    default => sub {
-        my $self = shift;
-        my $m    = WWW::Mechanize->new(
+our $MECH;
+
+sub mech { 
+    if (!$MECH) { 
+        $MECH = WWW::Mechanize->new(
             agent       => 'Net-Google-Code',
+            keep_alive  => 4,
             cookie_jar  => {},
             stack_depth => 1,
             timeout     => 60,
         );
-        return $m;
     }
-);
+    return $MECH ;
+}
 
 sub fetch {
     my $self = shift;
@@ -38,7 +37,7 @@ sub fetch {
     }
 }
 
-no Moose::Role;
+no Any::Moose;
 
 1;
 
@@ -54,6 +53,8 @@ Net::Google::Code::Role::Fetchable - Fetchable Role
 =head1 INTERFACE
 
 =over 4
+
+=item mech
 
 =item fetch
 

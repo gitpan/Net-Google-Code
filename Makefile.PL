@@ -8,13 +8,14 @@ license  'perl';
 test_requires 'Test::More';
 test_requires 'Test::MockModule';
 test_requires 'File::Slurp';
-requires 'Moose';
+requires 'Any::Moose';
 requires 'WWW::Mechanize';
 requires 'HTML::TreeBuilder';
 requires 'Params::Validate';
 requires 'DateTime';
 requires 'MIME::Types';
 requires 'File::MMagic';
+requires 'JSON';
 
 recursive_author_tests('xt/');
 
