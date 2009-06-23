@@ -6,9 +6,7 @@ with 'Net::Google::Code::Role::URL';
 with 'Net::Google::Code::Role::Fetchable';
 with 'Net::Google::Code::Role::Pageable';
 with  'Net::Google::Code::Role::HTMLTree';
-with  'Net::Google::Code::Role::Atom';
 use Net::Google::Code::Issue;
-use Encode;
 
 our %CAN_MAP = (
     'all'    => 1,
@@ -36,7 +34,9 @@ sub updated_after {
     my @results;
 
     my $content = $self->fetch( $self->base_feeds_url . 'issueupdates/basic' );
-    my ( $feed, $entries ) = $self->parse_atom( $content );
+    require Net::Google::Code::AtomParser;
+    my $atom_parser = Net::Google::Code::AtomParser->new;
+    my ( $feed, $entries ) = $atom_parser->parse( $content );
     if (@$entries) {
         my $min_updated =
           Net::Google::Code::DateTime->new_from_string( $entries->[-1]->{updated} );
@@ -96,7 +96,8 @@ sub search {
     die "Server threw an error " . $mech->response->status_line . 'when search'
       unless $mech->response->is_success;
 
-    my $content = decode( 'utf8', $mech->response->content );
+    my $content = $mech->response->content;
+    utf8::downgrade( $content, 1 );
 
     if ( $mech->title =~ /issue\s+(\d+)/i ) {
 
