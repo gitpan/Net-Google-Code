@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 21;
+use Test::More tests => 23;
 use Test::MockModule;
 
 # $content is a real page: http://code.google.com/p/chromium/issues/detail?id=14
@@ -42,6 +42,8 @@ What happens instead?
 Installer simply fails, notifying the user to adjust their firewall settings.
 EOF
 
+$description =~ s/\s+$//;
+
 my %info = (
     id          => 14,
     summary     => 'Proxy settings for installer',
@@ -51,6 +53,8 @@ my %info = (
     reporter    => 'seanamonroe',
     status => 'Available',
     closed => undef,
+    merged => undef,
+    stars => 34,
 );
 
 my @labels = (
@@ -58,9 +62,13 @@ my @labels = (
     'intext',   'Mstone-X', 'Foo-Bar-Baz',
 );
 
-for my $item ( qw/id summary description owner cc reporter status closed/ ) {
+for my $item (
+    qw/id summary description owner cc reporter status closed merged
+    stars/
+  )
+{
     if ( defined $info{$item} ) {
-        is ( $issue->$item, $info{$item}, "$item is extracted" );
+        is( $issue->$item, $info{$item}, "$item is extracted" );
     }
     else {
         ok( !defined $issue->$item, "$item is not defined" );
@@ -93,11 +101,11 @@ is( $issue->comments->[2]->sequence, 4, 'sequence of comment 2 is 4' );
 is( scalar @{ $issue->attachments }, 3, 'attachments are extracted' );
 is( $issue->attachments->[0]->size, '11.7 KB', 'size of the 1st attachment' );
 
-is( $issue->updated, '2008-12-20T00:59:29', 'updated' );
+is( $issue->updated, '2008-12-20T01:59:29', 'updated' );
 
 
 $content = read_file("$Bin/sample/02.issue_without_attachments.html");
 utf8::downgrade( $content, 1 );
 $issue->load(14);
-is( $issue->updated, '2008-12-20T00:59:29', 'updated' );
+is( $issue->updated, '2008-12-20T01:59:29', 'updated' );
 is_deeply( $issue->attachments, [], 'no attachments are extracted' );
