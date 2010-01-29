@@ -160,7 +160,8 @@ sub parse {
         {
 # the \w+ is person or people, I don't know if google will change that word
 # some time, so just use \w+
-            $self->stars($1);
+            my $stars = $1;
+            $self->stars($stars);
         }
     }
 
@@ -745,7 +746,7 @@ sunnavy  C<< <sunnavy@bestpractical.com> >>
 
 =head1 LICENCE AND COPYRIGHT
 
-Copyright 2008-2009 Best Practical Solutions.
+Copyright 2008-2010 Best Practical Solutions.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
